@@ -1,0 +1,90 @@
+---
+AWSTemplateFormatVersion: 2010-09-09
+
+Description:
+  This template creates a CloudFront Origin Access Identity.
+
+Parameters:
+  Environment:
+    Type: String
+    Default: DEV
+    AllowedValues: 
+      - DEV
+      - QA
+
+Mappings:
+  Environments:
+    DEV:
+      EnvironmentName: "dev"
+    QA:
+      EnvironmentName: "qa"
+
+Resources:
+  TokenlabChallengeSiteS3Bucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      AccessControl: Private
+      BucketName:
+        Fn::Sub:
+          - ${environment}-tokenlabchallenge
+          - environment: !FindInMap [ Environments, !Ref Environment, EnvironmentName ]
+      WebsiteConfiguration:
+        ErrorDocument: index.html
+        IndexDocument: index.html
+
+  TokenlabChallengeSiteS3BucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    DependsOn: TokenlabChallengeSiteS3Bucket
+    Properties:
+      Bucket: !Ref TokenlabChallengeSiteS3Bucket
+      PolicyDocument:
+        Statement:
+        - Effect: Allow
+          Principal:
+            CanonicalUser:
+              Fn::ImportValue:
+                !Sub "${Environment}-CloudfrontS3CanonicalUserID"
+          Action: s3:GetObject
+          Resource: !Join [ "", [ !GetAtt TokenlabChallengeSiteS3Bucket.Arn, "/*" ] ]
+
+  TokenlabChallengeSiteCloudFrontDistribution:
+    Type: AWS::CloudFront::Distribution
+    DependsOn:
+      - TokenlabChallengeSiteS3Bucket
+    Properties:
+      DistributionConfig:
+        Comment: !Sub "Tokenlab Challenge - Frontend - ${Environment}"
+        CustomErrorResponses:
+          - ErrorCode: 404
+            ResponseCode: 200
+            ResponsePagePath: "/"
+          - ErrorCode: 403
+            ResponseCode: 200
+            ResponsePagePath: "/"
+        DefaultCacheBehavior:
+          AllowedMethods:
+            - GET
+            - HEAD
+            - OPTIONS
+          CachePolicyId: 4135ea2d-6df8-44a3-9df3-4b5a84be39ad # Managed-CachingDisabled
+          Compress: true
+          SmoothStreaming: false
+          TargetOriginId: TokenlabChallengeS3WebsiteOrigin
+          ViewerProtocolPolicy: redirect-to-https
+        DefaultRootObject: index.html
+        Enabled: true
+        HttpVersion: http2
+        IPV6Enabled: true
+        Origins:
+          - Id: TokenlabChallengeS3WebsiteOrigin
+            DomainName: !GetAtt TokenlabChallengeSiteS3Bucket.DomainName
+            S3OriginConfig: 
+              OriginAccessIdentity:
+                Fn::Sub:
+                  - origin-access-identity/cloudfront/${oai}
+                  - oai: 
+                      Fn::ImportValue:
+                        !Sub "${Environment}-CloudfrontOriginAccessID"
+        PriceClass: PriceClass_100
+        ViewerCertificate:
+          CloudFrontDefaultCertificate: true

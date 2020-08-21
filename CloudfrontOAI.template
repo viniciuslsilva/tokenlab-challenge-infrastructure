@@ -1,0 +1,34 @@
+---
+AWSTemplateFormatVersion: 2010-09-09
+
+Description:
+  This template creates a CloudFront Origin Access Identity.
+
+Parameters:
+  Environment:
+    Type: String
+    Default: DEV
+    AllowedValues: 
+      - DEV
+      - QA
+
+
+Resources:
+  CloudFrontOriginAccessIdentity:
+    Type: AWS::CloudFront::CloudFrontOriginAccessIdentity
+    Properties:
+      CloudFrontOriginAccessIdentityConfig:
+        Comment: !Join [ " ", [ !Ref Environment, OAI ] ]
+
+Outputs:
+  CloudfrontOriginAccessID:
+    Description: Cloudfront Origin Access ID
+    Value: !Ref CloudFrontOriginAccessIdentity
+    Export:
+      Name: !Sub "${Environment}-CloudfrontOriginAccessID"
+
+  CloudfrontS3CanonicalUserID:
+    Description: Cloudfront S3 Canonical User ID
+    Value: !GetAtt CloudFrontOriginAccessIdentity.S3CanonicalUserId
+    Export:
+      Name: !Sub "${Environment}-CloudfrontS3CanonicalUserID"
